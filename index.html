@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>RH Calculator System - LocalStorage</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
   <style>
     body { min-height: 100vh; }
@@ -16,13 +16,12 @@
     .form-container { background: #f8f9fa; border-radius: 15px; border: 1px solid #dee2e6; }
     .table-container { overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
     .btn-custom { border-radius: 10px; font-weight: 600; }
-    .status-badge { border-radius: 20px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; }
   </style>
 </head>
 <body>
   <div class="container-fluid py-4">
-    <div class="main-container mx-auto p-4" style="max-width: 1400px;">
-      
+    <div class="main-container mx-auto p-4" style="max-width:1400px;">
+
       <!-- Header -->
       <div class="header text-center mb-4">
         <h1><i class="fas fa-store"></i> RH Calculator System</h1>
@@ -71,6 +70,16 @@
             <label class="form-label">RH Days *</label>
             <input type="number" class="form-control" id="rh_days" min="1" required>
           </div>
+
+          <div class="col-md-3">
+            <label class="form-label">SI</label>
+            <input type="number" class="form-control" id="si" min="0" placeholder="0">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Actual</label>
+            <input type="number" class="form-control" id="actual" min="0" placeholder="0">
+          </div>
+
           <div class="col-12">
             <button type="submit" class="btn btn-primary btn-custom"><i class="fas fa-plus"></i> Add Product</button>
           </div>
@@ -108,6 +117,9 @@
                 <th>RH Date</th>
                 <th>Days Left</th>
                 <th>Status</th>
+                <th>SI</th>
+                <th>Actual</th>
+                <th>Difference</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -119,183 +131,292 @@
     </div>
   </div>
 
+  <!-- Edit Modal -->
+  <div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title"><i class="fas fa-edit"></i> Edit Product</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="editForm">
+          <div class="modal-body">
+            <input type="hidden" id="edit_id">
+            <div class="mb-3">
+              <label class="form-label">Rack # *</label>
+              <input type="text" class="form-control" id="edit_rack" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Product Name *</label>
+              <input type="text" class="form-control" id="edit_product_name" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Expiry Date *</label>
+              <input type="date" class="form-control" id="edit_expiry_date" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">RH Days *</label>
+              <input type="number" class="form-control" id="edit_rh_days" min="1" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">SI</label>
+              <input type="number" class="form-control" id="edit_si" min="0">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Actual</label>
+              <input type="number" class="form-control" id="edit_actual" min="0">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-success btn-custom"><i class="fas fa-save"></i> Update Product</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-let products = JSON.parse(localStorage.getItem("products")) || [];
+/* ======= Data ======= */
+let products = JSON.parse(localStorage.getItem("products") || "[]");
 
-// --- Add Product ---
-// --- Add Product ---
-document.getElementById("addForm").addEventListener("submit", function(e){
-  e.preventDefault();
-  let rack = document.getElementById("rack").value;
-  let name = document.getElementById("product_name").value;
-  let expiry = document.getElementById("expiry_date").value;
-  let rh_days = parseInt(document.getElementById("rh_days").value); // store original only
-
-  let expiryDate = new Date(expiry);
-  let rhDate = new Date(expiryDate);
-  rhDate.setDate(rhDate.getDate() - (rh_days + 7 - 1)); // apply +7 only here
-
-  let product = {
-    id: Date.now(),
-    rack,
-    product_name: name,
-    expiry_date: expiry,
-    rh_days, // store original input only
-    rh_date: rhDate.toISOString().split("T")[0]
-  };
-
-  products.push(product);
-  saveData();
-  this.reset();
-});
-
-
-// --- Save to LocalStorage ---
-function saveData(){
+/* ======= Helpers ======= */
+function saveData() {
   localStorage.setItem("products", JSON.stringify(products));
   renderTable();
   updateStats();
 }
 
-// --- Get Status ---
-function getStatus(p){
-  let today = new Date().toISOString().split("T")[0];
+function formatDaysLeft(expiry) {
+  if (!expiry) return "";
+  const today = new Date();
+  const exp = new Date(expiry);
+  const diff = Math.ceil((exp - today) / (1000*60*60*24));
+  return diff < 0 ? "Expired" : diff + " days";
+}
+
+function getTodayISO() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function getStatus(p) {
+  const today = getTodayISO();
+  if (!p.expiry_date) return "safe";
   if (p.expiry_date <= today) return "expired";
   if (p.rh_date <= today) return "warning";
   return "safe";
 }
 
-// --- Days Left ---
-function getDaysLeft(expiry){
-  let today = new Date();
-  let exp = new Date(expiry);
-  let diff = Math.ceil((exp - today) / (1000*60*60*24));
-  return diff < 0 ? "Expired" : diff+" days";
-}
+/* ======= Add (with merge) ======= */
+document.getElementById("addForm").addEventListener("submit", function(e) {
+  e.preventDefault();
 
-// --- Render Table ---
-function renderTable(){
-  let search = document.getElementById("searchBox").value.toLowerCase();
-  let filter = document.getElementById("statusFilter").value;
+  // read DOM values explicitly
+  const rackVal = document.getElementById("rack").value.trim();
+  const nameVal = document.getElementById("product_name").value.trim();
+  const expiryVal = document.getElementById("expiry_date").value;
+  const rhDaysVal = parseInt(document.getElementById("rh_days").value) || 0;
+  const siVal = parseInt(document.getElementById("si").value) || 0;
+  const actualVal = parseInt(document.getElementById("actual").value) || 0;
 
-  let tbody = document.getElementById("productTable");
+  // compute rh_date
+  const expiryDateObj = new Date(expiryVal);
+  const rhDateObj = new Date(expiryDateObj);
+  rhDateObj.setDate(rhDateObj.getDate() - (rhDaysVal + 7 - 1));
+  const rhDateStr = rhDateObj.toISOString().split("T")[0];
+
+  // merge by rack + product name + expiry_date
+  const existingIndex = products.findIndex(p =>
+    p.rack.toLowerCase() === rackVal.toLowerCase() &&
+    p.product_name.toLowerCase() === nameVal.toLowerCase() &&
+    p.expiry_date === expiryVal
+  );
+
+  if (existingIndex !== -1) {
+    products[existingIndex].si = (products[existingIndex].si || 0) + siVal;
+    products[existingIndex].actual = (products[existingIndex].actual || 0) + actualVal;
+    products[existingIndex].rh_days = rhDaysVal;
+    products[existingIndex].rh_date = rhDateStr;
+  } else {
+    const product = {
+      id: Date.now(),
+      rack: rackVal,
+      product_name: nameVal,
+      expiry_date: expiryVal,
+      rh_days: rhDaysVal,
+      rh_date: rhDateStr,
+      si: siVal,
+      actual: actualVal
+    };
+    products.push(product);
+  }
+
+  saveData();
+  this.reset();
+});
+
+/* ======= Render Table ======= */
+function renderTable() {
+  const search = document.getElementById("searchBox").value.toLowerCase();
+  const filter = document.getElementById("statusFilter").value;
+  const tbody = document.getElementById("productTable");
   tbody.innerHTML = "";
 
-  products.filter(p => {
-    let matches = p.rack.toLowerCase().includes(search) || p.product_name.toLowerCase().includes(search);
-    let status = getStatus(p);
-    if (filter && status !== filter) return false;
-    return matches;
-  }).forEach(p => {
-    let status = getStatus(p);
-    let statusBadge = 
-      status === "safe" ? `<span class="badge bg-success">Safe</span>` :
-      status === "warning" ? `<span class="badge bg-warning">For Pull-Out</span>` :
-      `<span class="badge bg-danger">Expired</span>`;
+  products
+    .filter(p => {
+      const matches = p.rack.toLowerCase().includes(search) || p.product_name.toLowerCase().includes(search);
+      const status = getStatus(p);
+      if (filter && status !== filter) return false;
+      return matches;
+    })
+    .forEach(p => {
+      const status = getStatus(p);
+      const statusBadge =
+        status === "safe" ? `<span class="badge bg-success">Safe</span>` :
+        status === "warning" ? `<span class="badge bg-warning">For Pull-Out</span>` :
+        `<span class="badge bg-danger">Expired</span>`;
 
-    let row = `
-      <tr>
-        <td>${p.rack}</td>
-        <td>${p.product_name}</td>
-        <td>${p.expiry_date}</td>
-        <td>${p.rh_days}</td>
-        <td>${p.rh_date}</td>
-        <td>${getDaysLeft(p.expiry_date)}</td>
-        <td>${statusBadge}</td>
-        <td>
-          <button class="btn btn-sm btn-info" onclick='editProduct(${p.id})'><i class="fas fa-edit"></i></button>
-          <button class="btn btn-sm btn-danger" onclick='deleteProduct(${p.id})'><i class="fas fa-trash"></i></button>
-        </td>
-      </tr>`;
-    tbody.innerHTML += row;
-  });
+      const diff = (p.actual || 0) - (p.si || 0);
+      const diffHTML = diff < 0 ? `<span style="color:red;font-weight:600">${diff}</span>` : `${diff}`;
+
+      const row = `
+        <tr>
+          <td>${escapeHtml(p.rack)}</td>
+          <td>${escapeHtml(p.product_name)}</td>
+          <td>${p.expiry_date ?? ''}</td>
+          <td>${p.rh_days ?? ''}</td>
+          <td>${p.rh_date ?? ''}</td>
+          <td>${formatDaysLeft(p.expiry_date)}</td>
+          <td>${statusBadge}</td>
+          <td>${p.si ?? 0}</td>
+          <td>${p.actual ?? 0}</td>
+          <td>${diffHTML}</td>
+          <td>
+            <button class="btn btn-sm btn-info" onclick="editProduct(${p.id})"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})"><i class="fas fa-trash"></i></button>
+          </td>
+        </tr>
+      `;
+      tbody.innerHTML += row;
+    });
 }
 
-// --- Update Stats ---
-function updateStats(){
-  let today = new Date().toISOString().split("T")[0];
-  let safe = products.filter(p => getStatus(p) === "safe").length;
-  let warning = products.filter(p => getStatus(p) === "warning").length;
-  let expired = products.filter(p => getStatus(p) === "expired").length;
+/* simple HTML escaper */
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/[&<>"']/g, s => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[s]));
+}
+
+/* ======= Stats ======= */
+function updateStats() {
+  const safe = products.filter(p => getStatus(p) === "safe").length;
+  const warning = products.filter(p => getStatus(p) === "warning").length;
+  const expired = products.filter(p => getStatus(p) === "expired").length;
 
   document.getElementById("safe_count").innerText = safe;
   document.getElementById("warning_count").innerText = warning;
   document.getElementById("expired_count").innerText = expired;
 }
 
-// --- Delete Product ---
-function deleteProduct(id){
-  if(confirm("Are you sure you want to delete this product?")){
-    products = products.filter(p => p.id !== id);
-    saveData();
-  }
+/* ======= Delete ======= */
+function deleteProduct(id) {
+  if (!confirm("Are you sure you want to delete this product?")) return;
+  products = products.filter(p => p.id !== id);
+  saveData();
 }
 
-// --- Edit Product ---
-function editProduct(id){
-  let p = products.find(p => p.id === id);
-  if(!p) return;
-  document.getElementById("rack").value = p.rack;
-  document.getElementById("product_name").value = p.product_name;
-  document.getElementById("expiry_date").value = p.expiry_date;
-  document.getElementById("rh_days").value = p.rh_days; // show original only
-  deleteProduct(id); // re-add after editing
+/* ======= Edit ======= */
+function editProduct(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  document.getElementById("edit_id").value = product.id;
+  document.getElementById("edit_rack").value = product.rack;
+  document.getElementById("edit_product_name").value = product.product_name;
+  document.getElementById("edit_expiry_date").value = product.expiry_date;
+  document.getElementById("edit_rh_days").value = product.rh_days ?? '';
+  document.getElementById("edit_si").value = product.si ?? 0;
+  document.getElementById("edit_actual").value = product.actual ?? 0;
+
+  new bootstrap.Modal(document.getElementById("editModal")).show();
 }
 
+document.getElementById("editForm").addEventListener("submit", function(e) {
+  e.preventDefault();
+  const id = parseInt(document.getElementById("edit_id").value, 10);
+  const index = products.findIndex(p => p.id === id);
+  if (index === -1) return;
 
-// --- Export Excel ---
-function exportExcel(){
-  let searchBox = document.getElementById("searchBox");
-  let search = searchBox ? searchBox.value.toLowerCase() : "";
-  let filter = document.getElementById("statusFilter").value;
+  const rackVal = document.getElementById("edit_rack").value.trim();
+  const nameVal = document.getElementById("edit_product_name").value.trim();
+  const expiryVal = document.getElementById("edit_expiry_date").value;
+  const rhDaysVal = parseInt(document.getElementById("edit_rh_days").value) || 0;
+  const siVal = parseInt(document.getElementById("edit_si").value) || 0;
+  const actualVal = parseInt(document.getElementById("edit_actual").value) || 0;
 
-  let filtered = products.filter(p => {
-    let matches = p.rack.toLowerCase().includes(search) || p.product_name.toLowerCase().includes(search);
-    let status = getStatus(p);
+  const expiryDateObj = new Date(expiryVal);
+  const rhDateObj = new Date(expiryDateObj);
+  rhDateObj.setDate(rhDateObj.getDate() - (rhDaysVal + 7 - 1));
+  const rhDateStr = rhDateObj.toISOString().split("T")[0];
+
+  products[index] = {
+    ...products[index],
+    rack: rackVal,
+    product_name: nameVal,
+    expiry_date: expiryVal,
+    rh_days: rhDaysVal,
+    rh_date: rhDateStr,
+    si: siVal,
+    actual: actualVal
+  };
+
+  saveData();
+  bootstrap.Modal.getInstance(document.getElementById("editModal")).hide();
+});
+
+/* ======= Export ======= */
+function exportExcel() {
+  const search = document.getElementById("searchBox").value.toLowerCase();
+  const filter = document.getElementById("statusFilter").value;
+
+  const filtered = products.filter(p => {
+    const matches = p.rack.toLowerCase().includes(search) || p.product_name.toLowerCase().includes(search);
+    const status = getStatus(p);
     if (filter && status !== filter) return false;
     return matches;
   });
 
-  let data = [["Rack #","Product Name","Expiry Date","RH","RH Date","Days Left","Status"]];
-  filtered.forEach(p=>{
+  const data = [["Rack #","Product Name","Expiry Date","RH Days","RH Date","Days Left","Status","SI","Actual","Difference"]];
+  filtered.forEach(p => {
     let status = getStatus(p);
-    if(status === "warning") status = "Pull-Out";
-    if(status === "safe") status = "Safe";
-    if(status === "expired") status = "Expired";
+    if (status === "warning") status = "Pull-Out";
+    else if (status === "safe") status = "Safe";
+    else if (status === "expired") status = "Expired";
 
-    data.push([
-      p.rack,
-      p.product_name,
-      p.expiry_date,
-      p.rh_days,
-      p.rh_date,
-      getDaysLeft(p.expiry_date),
-      status
-    ]);
+    const diff = (p.actual || 0) - (p.si || 0);
+    data.push([ p.rack, p.product_name, p.expiry_date, p.rh_days, p.rh_date, formatDaysLeft(p.expiry_date), status, p.si || 0, p.actual || 0, diff ]);
   });
 
-  if(data.length === 1){ // only header row
-    alert("No products to export with current search/filter.");
-    return;
-  }
+  if (data.length === 1) { alert("No products to export with current search/filter."); return; }
 
-  let ws = XLSX.utils.aoa_to_sheet(data);
-  let wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Products");
-  XLSX.writeFile(wb, "RH_Report_" + new Date().toISOString().split("T")[0] + ".xlsx");
+  XLSX.writeFile(wb, "RH_Report_" + getTodayISO() + ".xlsx");
 }
 
-// --- Init ---
-window.onload = function(){
+/* ======= Init & bindings ======= */
+document.getElementById("searchBox").addEventListener("input", renderTable);
+document.getElementById("statusFilter").addEventListener("change", renderTable);
+
+function init() {
   renderTable();
   updateStats();
-
-// Make sure search + filter work after reload
-  document.getElementById("searchBox").addEventListener("input", renderTable);
-  document.getElementById("statusFilter").addEventListener("change", renderTable);
-};
-
-
+}
+init();
 </script>
 </body>
 </html>
